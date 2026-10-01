@@ -1,0 +1,67 @@
+name: bump
+
+# Points Formula/pion.rb at the newest pavelhorak/pion release, but only after
+# installing and testing it. It polls rather than being triggered by Pion's
+# release workflow, so no cross-repo token has to exist.
+
+on:
+  schedule:
+    - cron: "23 */6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    outputs:
+      tag: ${{ steps.latest.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: latest
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag=$(gh release view -R pavelhorak/pion --json tagName --jq .tagName)
+          cur=$(sed -nE 's#.*/releases/download/(v[^/]+)/.*#\1#p' Formula/pion.rb)
+          echo "latest release: $tag · formula: $cur"
+          if [ "$tag" != "$cur" ]; then echo "tag=$tag" >> "$GITHUB_OUTPUT"; fi
+
+  bump:
+    needs: check
+    if: needs.check.outputs.tag != ''
+    runs-on: macos-14
+    env:
+      HOMEBREW_NO_AUTO_UPDATE: 1
+      HOMEBREW_NO_INSTALL_CLEANUP: 1
+      TAG: ${{ needs.check.outputs.tag }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Rewrite the url and sha256
+        run: |
+          ver="${TAG#v}"
+          file="pion-${ver}-macos-arm64.tar.gz"
+          sum=$(gh release download "$TAG" -R pavelhorak/pion -p SHA256SUMS -O - \
+                | awk -v f="$file" '$2 == f {print $1}')
+          if [ -z "$sum" ]; then
+            echo "::error::$TAG has no $file in its SHA256SUMS"; exit 1
+          fi
+          sed -i '' -E \
+            -e "s#/releases/download/v[^/]+/pion-[^/]+-macos-arm64\.tar\.gz#/releases/download/${TAG}/${file}#" \
+            -e "s#sha256 \"[0-9a-f]{64}\"#sha256 \"${sum}\"#" Formula/pion.rb
+          git diff
+
+      - name: Commit locally, then install and test that commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -am "pion ${TAG#v}"
+          brew tap pavelhorak/tap "$GITHUB_WORKSPACE"
+          brew install pavelhorak/tap/pion
+          brew test pavelhorak/tap/pion
+
+      - name: Push only what passed
+        run: git push
