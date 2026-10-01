@@ -14,6 +14,8 @@ brew services start pion        # 127.0.0.1:1974; restarts at login and after a 
 redis-cli -p 1974 PING          # +PONG
 ```
 
+The service runs with `--kvcache --metal-attention --nle-embed`, so Pion's
+prompt cache (`pion-vllm-mlx`) and semantic cache work against it as installed.
 As a service, Pion keeps its WAL, snapshots and crash log in
 `$(brew --prefix)/var/pion` and logs to `$(brew --prefix)/var/log/pion.log`.
 Run by hand (`pion-server`), it writes them to the directory you start it from.
