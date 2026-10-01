@@ -29,15 +29,20 @@ class Pion < Formula
 
   def caveats
     <<~EOS
-      As a service, Pion listens on 127.0.0.1:1974 and keeps its WAL,
-      snapshots and crash log in:
+      As a service, Pion listens on 127.0.0.1:1974 with the prompt cache,
+      Metal attention and Apple's text embedding on (--kvcache
+      --metal-attention --nle-embed), and keeps its WAL, snapshots and
+      crash log in:
         #{var}/pion
       Run by hand, it writes them to the directory you start it from.
     EOS
   end
 
   service do
-    run [opt_bin/"pion-server", "--port", "1974"]
+    # The flags Pion's README and pion-vllm-mlx assume: KV.PREFIX.* (what
+    # PionPromptCache calls) answers only with --kvcache, and the semantic
+    # cache needs an embedding backend. Idle RSS is about 113 MB with them.
+    run [opt_bin/"pion-server", "--port", "1974", "--kvcache", "--metal-attention", "--nle-embed"]
     keep_alive true
     working_dir var/"pion"
     log_path var/"log/pion.log"
@@ -48,7 +53,10 @@ class Pion < Formula
     assert_match version.to_s, shell_output("#{bin}/pion-server --version")
 
     port = free_port
-    pid = spawn bin/"pion-server", "--port", port.to_s, "--no-auto-detect", "--no-auto-embed"
+    # Start it the way the service does, so a release whose service flags
+    # break fails here, before bump.yml moves the formula to it.
+    pid = spawn bin/"pion-server", "--port", port.to_s, "--kvcache", "--metal-attention",
+                "--nle-embed", "--no-auto-detect"
     begin
       reply = nil
       30.times do
@@ -61,6 +69,11 @@ class Pion < Formula
         sleep 1
       end
       assert_equal "+PONG\r\n", reply
+      # The prompt cache is on: a lookup answers MISS, not "V-store not enabled".
+      TCPSocket.open("127.0.0.1", port) do |sock|
+        sock.write "*2\r\n$16\r\nKV.PREFIX.LOOKUP\r\n$9\r\nbrew-test\r\n"
+        assert_equal "+MISS\r\n", sock.gets
+      end
     ensure
       Process.kill("TERM", pid)
       Process.wait(pid)
