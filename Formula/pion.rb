@@ -1,8 +1,8 @@
 class Pion < Formula
   desc "Memory engine for AI inference, wire-compatible with Redis"
   homepage "https://pion.pavelhorak.com/"
-  url "https://github.com/pavelhorak/pion/releases/download/v0.9.5/pion-0.9.5-macos-arm64.tar.gz"
-  sha256 "ed193efa798bf50edf5bdbf9cbecad047c5902212a6d85d34c25ed8d0e36e44a"
+  url "https://github.com/pavelhorak/pion/releases/download/v0.9.6/pion-0.9.6-macos-arm64.tar.gz"
+  sha256 "47156a164f7ab5f826917332189d9416d4af8e6af2d59dd8e14cce4bfa06e8bb"
   # Pion is Apache-2.0. The bundled libpion_vector (the tuned vector kernels) is
   # under its own binary licence: LICENSE-pion-vector in the tarball.
   license all_of: ["Apache-2.0", :cannot_represent]
